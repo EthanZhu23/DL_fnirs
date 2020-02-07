@@ -1,11 +1,11 @@
 import torch.nn as nn
-
+import torch.nn.functional as F
 
 class Combine(nn.Module):
     def __init__(self, input_nd, nf=64):
         super(Combine, self).__init__()
         self.output_num = [4, 2, 1]
-
+        self.nd = input_nd
         self.conv1 = nn.Conv2d(input_nd, nf, 5, stride=2, bias=False)
 
         self.conv2 = nn.Conv2d(nf, nf * 2, 5, stride=2, bias=False)
@@ -19,6 +19,7 @@ class Combine(nn.Module):
 
         self.conv5 = nn.Conv2d(nf * 8, 64, 20, stride=10, bias=False)
         self.fc1 = nn.Linear(5376, 2)
+
         #self.fc1 = nn.Linear(10752, 2)
         # self.fc2 = nn.Linear(4096, 1000)
         # self.softmax = nn.LogSoftmax(dim=1)
@@ -32,6 +33,8 @@ class Combine(nn.Module):
         #   batch_first=True)
         # self.linear = nn.Linear(64, 2)
         # self.sigmoid = nn.Sigmoid()
+    
+
 
     def spatial_pyramid_pool(self, previous_conv, num_sample, previous_conv_size, out_pool_size):
         '''
@@ -90,3 +93,4 @@ class Combine(nn.Module):
         # r_out2 = self.sigmoid(r_out2)
 
         return output
+    

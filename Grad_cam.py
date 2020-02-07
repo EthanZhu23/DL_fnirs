@@ -1,5 +1,6 @@
 from Combined_model import Combine
 import torch
+import torch.nn as nn
 import os
 import PIL
 from gradcam.utils import visualize_cam
@@ -13,10 +14,13 @@ dataset = MyDataset(
 
 torch_img,_,_ = dataset.__getitem__(0)
 normed_torch_img = torch_img
-
+gradient = []
 
 model = Combine(1)
-model = torch.load("C:\\Users\\EthanZhu\\Box Sync\\Project\\CNN_LSTM\\Github\\DL_fnirs\\train6\\model_5\\model\\Kfold_5_epoch_21.pth")
+model = torch.load("C:\\Users\\EthanZhu\\Box Sync\\Project\\CNN_LSTM\\Github\\dlfnirs\\train6\\model_5\\model\\Kfold_5_epoch_21.pth")
+for layer in model.children():
+    if type(layer) == nn.Conv2d:
+        layer.register_hook(gradient.append(grad))
 
 configs = [
     dict(model_type='vgg', arch=model, layer_name='features')
