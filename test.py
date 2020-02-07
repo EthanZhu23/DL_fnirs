@@ -7,19 +7,18 @@ from torchvision import datasets
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
+import math
+from MyDataset import MyDataset
 
 # In the current directory create a folder called 'data' and inside it another folder called 'Elephant' 
 # and inside, paste the image you want to check the GradCAM
 
 torch.manual_seed(1)
 
-# use the ImageNet transformation
-transform = transforms.Compose([transforms.Resize((32, 32)), 
-                                transforms.ToTensor(),
-                                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-
 # define a 1 image dataset
-dataset = datasets.ImageFolder(root='./data/', transform=transform)
+dataset = MyDataset(
+    txt_path=r"D:\\Ethan\\dlfnirs\\FFT_GRAY\\test.txt",
+    transform=transforms.Compose([transforms.ToTensor()]), target_transform=None)
 
 # define the dataloader to load that single image
 dataloader = data.DataLoader(dataset=dataset, shuffle=False, batch_size=1)
@@ -42,7 +41,7 @@ class Combine(nn.Module):
 
         self.conv5 = nn.Conv2d(nf * 8, 64, 20, stride=10, bias=False)
         self.fc1 = nn.Linear(5376, 2)
-
+        self.gradients = None
         #self.fc1 = nn.Linear(10752, 2)
         # self.fc2 = nn.Linear(4096, 1000)
         # self.softmax = nn.LogSoftmax(dim=1)
@@ -56,7 +55,6 @@ class Combine(nn.Module):
         #   batch_first=True)
         # self.linear = nn.Linear(64, 2)
         # self.sigmoid = nn.Sigmoid()
-    
 
 
     def spatial_pyramid_pool(self, previous_conv, num_sample, previous_conv_size, out_pool_size):
@@ -86,6 +84,24 @@ class Combine(nn.Module):
                 spp = torch.cat((spp, x.view(num_sample, -1)), 1)
         return spp
 
+    # hook for the gradients of the activations
+    def activations_hook(self, grad):
+        self.gradients = grad
+    
+    # method for the gradient extraction
+    def get_activations_gradient(self):
+        return self.gradients
+    
+    def get_activations(self, x):
+        x = self.conv1(x)
+        x = F.leaky_relu(x)
+
+        x = self.conv2(x)
+        x = F.leaky_relu(self.BN1(x))
+
+        x = self.conv3(x) 
+        return x
+
     def forward(self, x):
 
         x = self.conv1(x)
@@ -101,6 +117,7 @@ class Combine(nn.Module):
         # x = F.leaky_relu(self.BN3(x))
         # x = self.conv5(x)
         # spp = Modified_SPPLayer(4, x)
+        x.register_hook(self.activations_hook)
         spp = self.spatial_pyramid_pool(x, 1, [int(x.size(2)), int(x.size(3))], self.output_num)
         # print(spp.size())
         fc1 = self.fc1(spp)
@@ -121,8 +138,13 @@ class Combine(nn.Module):
 # Training procedure to be placed here
 #####
 
+sn = Combine(1)
+sn = torch.load("D:\\Ethan\\dlfnirs\\FFT_GRAY\\train6\\model_5\\model\\Kfold_5_epoch_21.pth")
 sn.eval()
-img, _ = next(iter(dataloader))
+img, _, _ = next(iter(dataloader))
+with torch.no_grad():
+    img = img.cuda()
+    sn = sn.cuda()
 pred = sn(img)
 pred_idx = pred.argmax(dim=1)
 pred[:, pred_idx].backward()
@@ -139,7 +161,7 @@ for i in range(activations.size(1)):
     activations[:, i, :, :] *= pooled_gradients[i]
 
 # average the channels of the activations
-heatmap = torch.mean(activations, dim=1).squeeze()
+heatmap = torch.mean(activations, dim=1).squeeze().cpu()
 
 # relu on top of the heatmap
 # expression (2) in https://arxiv.org/pdf/1610.02391.pdf
